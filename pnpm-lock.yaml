@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@evalops/agent-kit':
+        specifier: file:vendor/evalops-agent-kit-0.1.0.tgz
+        version: file:vendor/evalops-agent-kit-0.1.0.tgz
       '@modelcontextprotocol/ext-apps':
         specifier: ^1.0.1
         version: 1.7.4(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
@@ -403,6 +406,11 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@evalops/agent-kit@file:vendor/evalops-agent-kit-0.1.0.tgz':
+    resolution: {integrity: sha512-SnSYA0LPnXiLC3/oCw4FLN/UMFYamcAEwtRb8j2HVodDzJfp62JOTGMRT7ElmDUpTJajQh4uXM4f1dnd3kjjig==, tarball: file:vendor/evalops-agent-kit-0.1.0.tgz}
+    version: 0.1.0
+    engines: {node: '>=22'}
 
   '@exodus/bytes@1.15.1':
     resolution: {integrity: sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q==}
@@ -2069,6 +2077,8 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@evalops/agent-kit@file:vendor/evalops-agent-kit-0.1.0.tgz': {}
 
   '@exodus/bytes@1.15.1': {}
 

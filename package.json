@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/server.ts",
@@ -13,6 +13,7 @@
     "validate:plugin": "python3 scripts/validate-plugin.py"
   },
   "dependencies": {
+    "@evalops/agent-kit": "file:vendor/evalops-agent-kit-0.1.0.tgz",
     "@modelcontextprotocol/ext-apps": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "express": "^5.1.0",

@@ -2,6 +2,6 @@
 
 Please report vulnerabilities privately through GitHub's security-advisory flow.
 
-Pigeon treats the recipient gateway as the authority boundary. Effective scope cannot exceed requested scope; confirmation tokens are short-lived, single-use, and stored as hashes. Never expose a Codex app-server directly to the internet, forward OpenAI credentials through a relay, log private keys, or enable non-interactive production approval.
+Pigeon treats the Agent Kit daemon as the machine authority boundary. Effective scope cannot exceed requested scope, and native confirmation is required before Pigeon sends an elevated approval decision. Never expose the Agent Kit socket or Codex app-server to the network, put Platform credentials in plugin configuration, or enable non-interactive workspace writes.
 
-The current relay is evaluation-only and in-process. A network transport must add authenticated membership, replay protection, durable monotonic event sequences, rate limits, encryption in transit, and an append-only redacted audit log before production use.
+Platform Agent Runtime owns authenticated membership, replay protection, leases, durable events, and audit evidence. The local socket is owner-only; integrations receive scoped capabilities from the daemon. Pigeon must not log objectives, absolute paths, credentials, model responses, or raw daemon frames.

@@ -1,37 +1,97 @@
 import { randomUUID } from "node:crypto";
-import { canNarrowScope, type Delegation, type Scope, transition } from "./protocol.js";
-import { CapabilityStore } from "./security.js";
+import type { AuthorityScope, RunRecord, SubmitRequest } from "@evalops/agent-kit";
+import { canNarrowScope, type Delegation, type Scope } from "./protocol.js";
 
-export interface CodexAdapter { run(delegation: Delegation, signal?: AbortSignal): Promise<{ summary: string }> }
+export interface AgentKitTransport {
+  submit(request: SubmitRequest): Promise<RunRecord>;
+  inbox(recipientPrincipalId: string): Promise<RunRecord[]>;
+  getRun(runId: string): Promise<RunRecord>;
+  approve(runId: string, scope: AuthorityScope): Promise<RunRecord>;
+  reject(runId: string, reason: string): Promise<RunRecord>;
+  cancel(runId: string, reason: string): Promise<RunRecord>;
+}
 
-export class InMemoryRelay {
-  #events: Delegation[] = [];
-  publish(d: Delegation) { const i = this.#events.findIndex(x => x.id === d.id); if (i >= 0) this.#events[i] = structuredClone(d); else this.#events.push(structuredClone(d)); }
-  forRecipient(name: string) { return this.#events.filter(x => x.recipient === name).map(x => structuredClone(x)); }
-  get(id: string) { const d = this.#events.find(x => x.id === id); return d && structuredClone(d); }
+export interface GatewayIdentity {
+  organizationId: string;
+  workspaceId: string;
+  userPrincipalId: string;
+  devicePrincipalId: string;
 }
 
 export class Gateway {
-  #caps = new CapabilityStore();
-  constructor(public readonly name: string, private relay: InMemoryRelay, private adapter: CodexAdapter) {}
-  delegate(recipient: string, objective: string, workspace: string, requestedScope: Scope): Delegation {
-    const now = Date.now();
-    const d: Delegation = { id: randomUUID(), sender: this.name, recipient, objective, workspace, requestedScope, state: "pending", createdAt: now, expiresAt: now + 15 * 60_000, idempotencyKey: randomUUID() };
-    this.relay.publish(d); return d;
+  constructor(private readonly identity: GatewayIdentity, private readonly client: AgentKitTransport) {}
+
+  async delegate(recipient: string, objective: string, resourceId: string, requestedScope: Scope): Promise<Delegation> {
+    const run = await this.client.submit({
+      organization_id: this.identity.organizationId,
+      workspace_id: this.identity.workspaceId,
+      sender_principal_id: this.identity.userPrincipalId,
+      recipient_principal_id: recipient,
+      target_capability: "codex.app-server",
+      resource_id: resourceId,
+      objective,
+      requested_scope: requestedScope,
+      idempotency_key: `pigeon:${randomUUID()}`,
+    });
+    return project(run);
   }
-  inbox() { return this.relay.forRecipient(this.name).filter(d => d.state === "pending"); }
-  get(id: string) { return this.relay.get(id); }
-  prepareApproval(id: string, effectiveScope: Scope) {
-    const d = this.mustOwn(id); if (!canNarrowScope(d.requestedScope, effectiveScope)) throw new Error("scope_widening");
-    d.effectiveScope = effectiveScope; this.relay.publish(d);
-    return { capability: this.#caps.issue(id), confirmation: { sender: d.sender, objective: d.objective, workspace: d.workspace, effectiveScope } };
+
+  async inbox(): Promise<Delegation[]> {
+    return (await this.client.inbox(this.identity.userPrincipalId)).map(project);
   }
-  async confirmApproval(id: string, capability: string) {
-    if (!this.#caps.consume(capability, id)) throw new Error("invalid_confirmation");
-    const d = this.mustOwn(id); d.state = transition(d.state, "approve"); d.state = transition(d.state, "start"); this.relay.publish(d);
-    try { const result = await this.adapter.run(d); d.state = transition(d.state, "complete"); this.relay.publish(d); return result; }
-    catch (error) { d.state = transition(d.state, "fail"); this.relay.publish(d); throw error; }
+
+  async get(id: string): Promise<Delegation | undefined> {
+    try { return project(await this.client.getRun(id)); }
+    catch (error) {
+      if (isNotFound(error)) return undefined;
+      throw error;
+    }
   }
-  reject(id: string) { const d = this.mustOwn(id); d.state = transition(d.state, "reject"); this.relay.publish(d); }
-  private mustOwn(id: string) { const d = this.relay.get(id); if (!d || d.recipient !== this.name) throw new Error("not_found"); if (d.expiresAt < Date.now()) throw new Error("expired"); return d; }
+
+  async prepareApproval(id: string, effectiveScope: Scope) {
+    const delegation = await this.mustOwn(id);
+    if (!canNarrowScope(delegation.requestedScope, effectiveScope)) throw new Error("scope_widening");
+    return { confirmation: { sender: delegation.sender, objective: delegation.objective, workspace: delegation.workspace, effectiveScope } };
+  }
+
+  async confirmApproval(id: string, effectiveScope: Scope): Promise<Delegation> {
+    await this.mustOwn(id);
+    return project(await this.client.approve(id, effectiveScope));
+  }
+
+  async reject(id: string, reason = "recipient rejected"): Promise<Delegation> {
+    await this.mustOwn(id);
+    return project(await this.client.reject(id, reason));
+  }
+
+  async cancel(id: string, reason = "sender cancelled"): Promise<Delegation> {
+    return project(await this.client.cancel(id, reason));
+  }
+
+  private async mustOwn(id: string): Promise<Delegation> {
+    const delegation = await this.get(id);
+    if (!delegation || delegation.recipient !== this.identity.userPrincipalId) throw new Error("not_found");
+    return delegation;
+  }
+}
+
+function project(run: RunRecord): Delegation {
+  const state = run.state === "queued" ? (run.effective_scope ? "approved" : "pending") : run.state;
+  return {
+    id: run.run_id,
+    sender: run.request.sender_principal_id,
+    recipient: run.request.recipient_principal_id,
+    objective: run.request.objective,
+    workspace: run.request.resource_id,
+    requestedScope: run.request.requested_scope,
+    effectiveScope: run.effective_scope,
+    state,
+    createdAt: 0,
+    expiresAt: Number.MAX_SAFE_INTEGER,
+    idempotencyKey: run.request.idempotency_key,
+  };
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code: unknown }).code === "not_found";
 }
