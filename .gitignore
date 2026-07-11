@@ -4,4 +4,5 @@ dist/
 .pigeon/
 .venv/
 coverage/
+.worktrees/
 *.log
