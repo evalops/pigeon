@@ -3,13 +3,23 @@ import { z } from "zod";
 import type { RelayStore } from "./store.js";
 import { NonceStore, verifyDeviceRequest } from "./auth.js";
 import { CreateDelegationInputSchema, type Actor, type DeviceIdentity } from "./types.js";
+import { parseSlackAction, verifySlackRequest } from "../slack/actions.js";
 
-type Options = { store: RelayStore; devices: Map<string, DeviceIdentity>; clock?: () => number; slackInternalSecret?: string };
+type Options = { store: RelayStore; devices: Map<string, DeviceIdentity>; clock?: () => number; slackInternalSecret?: string; slackSigningSecret?: string };
 const TransitionBody = z.object({ expectedVersion: z.number().int().positive(), effectiveScope: z.enum(["discuss_only", "read_only", "workspace_write"]).optional() });
 const errorStatus: Record<string, number> = { not_found: 404, expired: 410, version_conflict: 409, scope_widening: 403, invalid_transition: 409, replay: 401, stale_request: 401, invalid_signature: 401, unauthorized: 401, codex_confirmation_required: 403 };
 
-export function createRelayApp({ store, devices, clock = Date.now, slackInternalSecret }: Options) {
-  const app = express(); const nonces = new NonceStore(); app.use(express.json({ limit: "32kb" }));
+export function createRelayApp({ store, devices, clock = Date.now, slackInternalSecret, slackSigningSecret }: Options) {
+  const app = express(); const nonces = new NonceStore();
+  app.post("/v1/slack/actions", express.text({ type: "application/x-www-form-urlencoded", limit: "32kb" }), async (req, res, next) => {
+    try {
+      if (!slackSigningSecret) throw new Error("unauthorized"); const raw = String(req.body); const timestamp = Number(req.header("x-slack-request-timestamp")); verifySlackRequest(raw, timestamp, String(req.header("x-slack-signature") ?? ""), slackSigningSecret, Math.floor(clock() / 1000));
+      const action = parseSlackAction(raw); if (action.action === "open") return res.json({ ok: true, open: action.delegationId }); const current = await store.get(action.delegationId, action.organizationId, action.userId); if (!current) throw new Error("not_found");
+      if (action.action === "approve" && current.requestedScope !== "discuss_only") throw new Error("codex_confirmation_required"); const actor = { organizationId: action.organizationId, userId: action.userId, deviceId: "slack", source: "slack" as const };
+      const command = action.action === "approve" ? { type: "approve" as const, effectiveScope: "discuss_only" as const } : { type: "reject" as const }; await store.transition(current.id, current.version, command, actor); return res.json({ ok: true });
+    } catch (error) { next(error); }
+  });
+  app.use(express.json({ limit: "32kb" }));
   app.get("/healthz", (_req, res) => { res.json({ ok: true }); });
 
   const deviceActor = (req: Request): Actor => {
