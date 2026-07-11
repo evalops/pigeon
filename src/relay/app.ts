@@ -8,7 +8,7 @@ import type { EnrollmentService } from "../enrollment/service.js";
 import type { SlackOidcClient } from "../enrollment/slack-oidc.js";
 
 type Options = { store: RelayStore; devices: Map<string, DeviceIdentity>; clock?: () => number; slackInternalSecret?: string; slackSigningSecret?: string; enrollment?: EnrollmentService; oidc?: Pick<SlackOidcClient, "authorizationUrl" | "exchange"> };
-const TransitionBody = z.object({ expectedVersion: z.number().int().positive(), effectiveScope: z.enum(["discuss_only", "read_only", "workspace_write"]).optional() });
+const TransitionBody = z.object({ expectedVersion: z.number().int().positive(), effectiveScope: z.enum(["discuss_only", "read_only", "workspace_write"]).optional(), summary: z.string().max(4000).optional(), threadId: z.string().max(200).optional() });
 const errorStatus: Record<string, number> = { not_found: 404, expired: 410, version_conflict: 409, scope_widening: 403, invalid_transition: 409, replay: 401, stale_request: 401, invalid_signature: 401, unauthorized: 401, codex_confirmation_required: 403 };
 
 export function createRelayApp({ store, devices, clock = Date.now, slackInternalSecret, slackSigningSecret, enrollment, oidc }: Options) {
@@ -50,7 +50,7 @@ export function createRelayApp({ store, devices, clock = Date.now, slackInternal
   for (const action of ["approve", "reject", "start", "complete", "fail", "cancel"] as const) app.post(`/v1/delegations/:id/${action}`, async (req, res, next) => {
     try {
       const actor = transitionActor(req); const body = TransitionBody.parse(req.body); if (action === "approve" && actor.source === "slack" && body.effectiveScope !== "discuss_only") throw new Error("codex_confirmation_required");
-      const command = action === "approve" ? { type: action, effectiveScope: body.effectiveScope ?? "discuss_only" } as const : { type: action } as const;
+      const command = action === "approve" ? { type: action, effectiveScope: body.effectiveScope ?? "discuss_only" } as const : action === "complete" ? { type: action, summary: body.summary, threadId: body.threadId } as const : { type: action } as const;
       res.json({ delegation: await store.transition(req.params.id!, body.expectedVersion, command, actor) });
     } catch (error) { next(error); }
   });

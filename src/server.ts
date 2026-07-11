@@ -8,11 +8,15 @@ import { canNarrowScope, ScopeSchema } from "./protocol.js";
 import { widgetHtml } from "./widget.js";
 import { RelayClient } from "./relay/client.js";
 import { loadRelayCredentials } from "./enrollment/local-credentials.js";
+import { CodexAppServerAdapter } from "./codex/app-server.js";
+import { RemoteExecutionWorker } from "./codex/execution-worker.js";
+import { resolveDelegationWorkspace } from "./codex/workspaces.js";
 
 const relay = new InMemoryRelay();
 const teammate = process.env.PIGEON_USER ?? "local";
 const gateway = new Gateway(teammate, relay, { run: async d => ({ summary: `Delegation ${d.id} accepted; configure PIGEON_CODEX_COMMAND for execution.` }) });
 const credentials = loadRelayCredentials(); const remote = credentials ? new RelayClient({ baseUrl: credentials.relayUrl, deviceId: credentials.deviceId, privateKey: credentials.privateKey }) : undefined;
+const workspaceMappings = JSON.parse(process.env.PIGEON_WORKSPACES ?? "{}") as Record<string, string>; const codexAdapter = new CodexAppServerAdapter(); const executionWorker = remote ? new RemoteExecutionWorker(remote, codexAdapter, (label, scope) => resolveDelegationWorkspace(label, scope, workspaceMappings)) : undefined;
 const teammates = (process.env.PIGEON_TEAMMATES ?? teammate).split(",").map(value => value.trim()).filter(Boolean);
 const server = new McpServer({ name: "pigeon", version: "0.1.0" }, { instructions: "Use Pigeon only for explicit teammate delegation. Open the inbox to review requests. Approval always requires native confirmation." });
 const UI = "ui://pigeon/inbox-v1.html";
@@ -31,8 +35,10 @@ server.registerTool("prepare_approval", { description: "Use this only from the P
   const c = remoteDelegation ? { sender: remoteDelegation.senderId, objective: remoteDelegation.objective, workspace: remoteDelegation.workspaceLabel, effectiveScope } : prepared!.confirmation;
   const answer = await server.server.elicitInput({ mode: "form", message: `Approve ${c.sender}'s Codex delegation? Objective: ${c.objective} | Workspace: ${c.workspace} | Authority: ${c.effectiveScope}`, requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Grant this authority" } }, required: ["confirm"] } });
   if (answer.action !== "accept" || answer.content?.confirm !== true) return result({ confirmed: false }, "Approval cancelled.");
-  if (remote) { let d = (await remote.approve(id, remoteDelegation!.version, effectiveScope)).delegation; d = (await remote.start(id, d.version)).delegation; d = (await remote.complete(id, d.version)).delegation; return result({ confirmed: true, delegation: d, result: { summary: `Delegation ${id} completed by the configured Codex gateway.` } }, "Delegation approved and completed."); }
+  if (remote) { const approved = (await remote.approve(id, remoteDelegation!.version, effectiveScope)).delegation; const d = await executionWorker!.execute(approved); return result({ confirmed: true, delegation: d, result: { summary: d.resultSummary, threadId: d.codexThreadId } }, "Delegation approved and completed."); }
   const run = await gateway.confirmApproval(id, prepared!.capability); return result({ confirmed: true, delegation: gateway.get(id), result: run }, "Delegation approved and completed.");
 });
+
+if (executionWorker) { const timer = setInterval(() => { void executionWorker.runApproved().catch(error => process.stderr.write(`Pigeon execution worker: ${error instanceof Error ? error.message : String(error)}\n`)); }, 2_000); timer.unref(); }
 
 if (process.argv[1] && readFileSync(process.argv[1], "utf8").includes("new McpServer")) await server.connect(new StdioServerTransport());

@@ -40,4 +40,8 @@ describe("relay store", () => {
     const store = new MemoryRelayStore(() => 1_000);
     await expect(store.createDelegation({ ...input, workspaceLabel: "/Users/alice/secret" }, actor)).rejects.toThrow("invalid_workspace_label");
   });
+
+  it("persists a bounded completion result for the sender", async () => {
+    const store = new MemoryRelayStore(() => 1_000); let { delegation } = await store.createDelegation({ ...input, idempotencyKey: "request-result-0001" }, actor); const bob = { ...actor, userId: "bob", deviceId: "bob-mac" }; delegation = await store.transition(delegation.id, 1, { type: "approve", effectiveScope: "read_only" }, bob); delegation = await store.transition(delegation.id, 2, { type: "start" }, bob); delegation = await store.transition(delegation.id, 3, { type: "complete", summary: "Reviewed successfully", threadId: "thread-1" }, bob); expect(delegation).toMatchObject({ state: "completed", resultSummary: "Reviewed successfully", codexThreadId: "thread-1" });
+  });
 });

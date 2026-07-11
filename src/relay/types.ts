@@ -12,13 +12,13 @@ export type CreateDelegationInput = z.infer<typeof CreateDelegationInputSchema>;
 
 export const RelayDelegationSchema = CreateDelegationInputSchema.safeExtend({
   id: z.string().uuid(), organizationId: z.string(), senderId: z.string(), state: StateSchema,
-  effectiveScope: ScopeSchema.optional(), version: z.number().int().positive(), createdAt: z.number().int(), updatedAt: z.number().int()
+  effectiveScope: ScopeSchema.optional(), resultSummary: z.string().max(4000).optional(), codexThreadId: z.string().max(200).optional(), version: z.number().int().positive(), createdAt: z.number().int(), updatedAt: z.number().int()
 });
 export type RelayDelegation = z.infer<typeof RelayDelegationSchema>;
 
 export const RelayCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approve"), effectiveScope: ScopeSchema }), z.object({ type: z.literal("reject") }),
-  z.object({ type: z.literal("start") }), z.object({ type: z.literal("complete") }), z.object({ type: z.literal("fail") }), z.object({ type: z.literal("cancel") })
+  z.object({ type: z.literal("start") }), z.object({ type: z.literal("complete"), summary: z.string().max(4000).optional(), threadId: z.string().max(200).optional() }), z.object({ type: z.literal("fail") }), z.object({ type: z.literal("cancel") })
 ]);
 export type RelayCommand = z.infer<typeof RelayCommandSchema>;
 

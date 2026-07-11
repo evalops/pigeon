@@ -11,7 +11,7 @@ const delegationFrom = (row: Record<string, unknown>): RelayDelegation => ({
   id: String(row.id), organizationId: String(row.organization_id), senderId: String(row.sender_id), recipientId: String(row.recipient_id),
   objective: String(row.objective), workspaceLabel: String(row.workspace_label), requestedScope: row.requested_scope as RelayDelegation["requestedScope"],
   ...(row.effective_scope ? { effectiveScope: row.effective_scope as RelayDelegation["requestedScope"] } : {}), state: row.state as RelayDelegation["state"],
-  version: Number(row.version), idempotencyKey: String(row.idempotency_key), expiresAt: Number(row.expires_at), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at)
+  ...(row.result_summary ? { resultSummary: String(row.result_summary) } : {}), ...(row.codex_thread_id ? { codexThreadId: String(row.codex_thread_id) } : {}), version: Number(row.version), idempotencyKey: String(row.idempotency_key), expiresAt: Number(row.expires_at), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at)
 });
 const eventFrom = (row: Record<string, unknown>): RelayEvent => ({ sequence: Number(row.sequence), delegationId: String(row.delegation_id), organizationId: String(row.organization_id), recipientId: String(row.recipient_id), type: row.type as RelayEvent["type"], version: Number(row.version), actor: row.actor as Actor, createdAt: Number(row.created_at) });
 
@@ -45,7 +45,7 @@ export class PostgresRelayStore implements RelayStore {
       if (current.organizationId !== actor.organizationId || current.recipientId !== actor.userId) throw new Error("not_found");
       if (current.expiresAt < this.clock() && current.state === "pending") throw new Error("expired"); if (current.version !== expectedVersion) throw new Error("version_conflict");
       let effectiveScope = current.effectiveScope; if (command.type === "approve") { if (!canNarrowScope(current.requestedScope, command.effectiveScope)) throw new Error("scope_widening"); effectiveScope = command.effectiveScope; }
-      const state = nextState(current.state, command.type); const updated = await client.query("UPDATE delegations SET state=$2,effective_scope=$3,version=version+1,updated_at=$4 WHERE id=$1 RETURNING *", [id, state, effectiveScope ?? null, this.clock()]);
+      const state = nextState(current.state, command.type); const updated = await client.query("UPDATE delegations SET state=$2,effective_scope=$3,version=version+1,updated_at=$4,result_summary=COALESCE($5,result_summary),codex_thread_id=COALESCE($6,codex_thread_id) WHERE id=$1 RETURNING *", [id, state, effectiveScope ?? null, this.clock(), command.type === "complete" ? command.summary ?? null : null, command.type === "complete" ? command.threadId ?? null : null]);
       const delegation = delegationFrom(updated.rows[0]); const event = await this.insertEvent(client, delegation, command.type, actor);
       await client.query("INSERT INTO relay_outbox(event_sequence,payload,available_at) VALUES($1,$2,$3)", [event.sequence, JSON.stringify(event), this.clock()]); await client.query("COMMIT"); return delegation;
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }

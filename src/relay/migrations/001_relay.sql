@@ -2,9 +2,11 @@ CREATE TABLE IF NOT EXISTS delegations (
   id uuid PRIMARY KEY, organization_id text NOT NULL, sender_id text NOT NULL, recipient_id text NOT NULL,
   objective text NOT NULL, workspace_label text NOT NULL, requested_scope text NOT NULL, effective_scope text,
   state text NOT NULL, version integer NOT NULL, idempotency_key text NOT NULL, expires_at bigint NOT NULL,
-  created_at bigint NOT NULL, updated_at bigint NOT NULL,
+  created_at bigint NOT NULL, updated_at bigint NOT NULL, result_summary text, codex_thread_id text,
   UNIQUE (organization_id, sender_id, idempotency_key)
 );
+ALTER TABLE delegations ADD COLUMN IF NOT EXISTS result_summary text;
+ALTER TABLE delegations ADD COLUMN IF NOT EXISTS codex_thread_id text;
 CREATE TABLE IF NOT EXISTS relay_events (
   sequence bigserial PRIMARY KEY, delegation_id uuid NOT NULL REFERENCES delegations(id), organization_id text NOT NULL,
   recipient_id text NOT NULL, type text NOT NULL, version integer NOT NULL, actor jsonb NOT NULL, created_at bigint NOT NULL

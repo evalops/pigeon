@@ -12,6 +12,8 @@ Pigeon packages an MCP server, an embedded delegation inbox, signed authority en
 - Approve triggers MCP `elicitation/create`; cancelling it starts nothing.
 - Confirmation capabilities are short-lived and single-use.
 - Delegation state transitions and Ed25519 envelopes are tested.
+- Slack OIDC enrollment registers device public keys while private keys remain local.
+- Approved remote requests launch a sandboxed local Codex app-server task and return its summary.
 
 The default transport remains an in-process evaluation relay. A Postgres-backed, signed HTTP relay is also included for durable cross-window and cross-machine delivery. See [Company relay operations](docs/company-relay.md).
 

@@ -45,6 +45,7 @@ export class MemoryRelayStore implements RelayStore {
       if (!canNarrowScope(current.requestedScope, command.effectiveScope)) throw new Error("scope_widening");
       current.effectiveScope = command.effectiveScope;
     }
+    if (command.type === "complete") { current.resultSummary = command.summary; current.codexThreadId = command.threadId; }
     current.state = nextState(current.state, command.type); current.version += 1; current.updatedAt = this.clock();
     this.#record(current, command.type, actor); return structuredClone(current);
   }

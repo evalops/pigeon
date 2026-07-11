@@ -13,7 +13,8 @@ export class RelayClient {
   approve(id: string, expectedVersion: number, effectiveScope: RelayDelegation["requestedScope"]) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/approve`, { expectedVersion, effectiveScope }); }
   reject(id: string, expectedVersion: number) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/reject`, { expectedVersion }); }
   start(id: string, expectedVersion: number) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/start`, { expectedVersion }); }
-  complete(id: string, expectedVersion: number) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/complete`, { expectedVersion }); }
+  complete(id: string, expectedVersion: number, result?: { summary: string; threadId: string }) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/complete`, { expectedVersion, ...result }); }
+  fail(id: string, expectedVersion: number) { return this.call<{ delegation: RelayDelegation }>("POST", `/v1/delegations/${encodeURIComponent(id)}/fail`, { expectedVersion }); }
 
   private async call<T>(method: string, relative: string, body: unknown): Promise<T> {
     const url = new URL(relative, this.options.baseUrl); const timestamp = this.clock(); const nonce = this.nonce(); const path = `${url.pathname}${url.search}`;

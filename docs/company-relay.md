@@ -8,7 +8,7 @@ The relay stores delegation metadata and an append-only event stream. It never n
 
 1. Start Docker Desktop.
 2. Copy `.env.example` to `.env` and keep it untracked.
-3. Encode each device's public `DeviceIdentity` JSON as base64url and join the values with commas in `PIGEON_DEVICES`. Private keys stay on their corresponding Codex machines.
+3. Configure `PIGEON_SLACK_CLIENT_ID` and `PIGEON_SLACK_CLIENT_SECRET` for Sign in with Slack. Static `PIGEON_DEVICES` remains available only for recovery and local fixtures.
 4. Run `docker compose up --build`.
 5. Confirm `curl http://127.0.0.1:8787/healthz` returns `{ "ok": true }`.
 
@@ -21,21 +21,28 @@ PIGEON_SMOKE_DATABASE_URL=postgres://pigeon:pigeon-local@127.0.0.1:55432/pigeon 
 
 ## Slack app
 
-Create an internal Slack app with bot scope `chat:write`. Enable interactivity and point the request URL to `https://YOUR_RELAY/v1/slack/actions`. Store the bot token and signing secret in the deployment secret manager. Pigeon verifies Slack's timestamped HMAC signature over the raw form body before accepting an interaction.
+Create an internal Slack app with bot scope `chat:write` and Sign in with Slack scopes `openid profile email`. Enable interactivity and point the request URL to `https://YOUR_RELAY/v1/slack/actions`. Add `https://YOUR_RELAY/v1/enrollment/callback` as an OAuth redirect URL. Store the bot token, signing secret, client ID, and client secret in the deployment secret manager. Pigeon verifies Slack's timestamped HMAC signature over the raw form body before accepting an interaction.
 
 Action messages use DMs. Elevated requests show Reject and Open in Codex; discussion-only requests also show Approve. Channel posting and parsing thread replies as commands are intentionally unsupported.
 
 ## Gateway configuration
 
-Configure the plugin MCP process with `PIGEON_RELAY_URL`, `PIGEON_DEVICE_ID`, `PIGEON_DEVICE_PRIVATE_KEY`, `PIGEON_USER`, and a comma-separated `PIGEON_TEAMMATES`. Restart Codex after changing plugin environment. Without relay variables, Pigeon uses its deterministic in-process evaluation mode.
+After building Pigeon, enroll the machine:
+
+```bash
+PIGEON_RELAY_URL=https://YOUR_RELAY pnpm enroll
+```
+
+The enrollment command generates an Ed25519 key locally, opens Sign in with Slack, waits for the relay to recognize the device, and writes an owner-only credential file to `~/.pigeon/device.json`. The private key never leaves the machine. The plugin reads this file automatically; restart Codex after enrollment.
+
+Set `PIGEON_WORKSPACES` to a JSON object mapping safe relay labels to absolute local roots, for example `{"pigeon":"/Users/me/src/pigeon"}`. `read_only` and `workspace_write` requests fail closed when their label is not mapped. `discuss_only` always runs in a new empty temporary directory. Set `PIGEON_CODEX_MODEL` to override the compatibility default `gpt-5.4`, and use a comma-separated `PIGEON_TEAMMATES` list for recipient discovery. Without relay credentials, Pigeon uses deterministic in-process evaluation mode.
 
 ## Production prerequisites
 
 - Put the relay behind managed TLS and company ingress authentication controls.
 - Store Postgres credentials, Slack tokens, and device registration data in the company secret manager.
-- Replace static `PIGEON_DEVICES` bootstrap with the company's SSO-backed device enrollment process.
 - Back up Postgres, monitor `/healthz`, outbox lag, signature failures, state conflicts, and capability replay attempts.
 - Export append-only security events to the company logging system and apply the retention policy in the design spec.
 - Exercise device revocation and the organization-wide kill switch before enabling `workspace_write`.
 
-The shipped adapter completes an approved relay lifecycle but does not yet launch a recipient Codex app-server task. Keep `workspace_write` disabled until that adapter and company policy enforcement are integrated and security-reviewed.
+Approved work launches an ephemeral local Codex app-server thread. Pigeon binds it to the approved workspace root, maps `read_only` to the read-only sandbox and `workspace_write` to the workspace-write sandbox, disables further sandbox escalation, and returns the final summary and Codex thread ID through the relay. Keep `workspace_write` limited to allowlisted teams and repositories until company policy enforcement is security-reviewed.
