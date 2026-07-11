@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { RunRecord, SubmitRequest } from "@evalops/agent-kit";
 import { CapabilityStore, generateIdentity, signEnvelope, verifyEnvelope } from "./security.js";
-import { Gateway, InMemoryRelay } from "./gateway.js";
+import { Gateway, type AgentKitTransport } from "./gateway.js";
 
 describe("security", () => {
   it("detects tampering and consumes confirmation once", () => {
@@ -15,26 +16,40 @@ describe("security", () => {
   });
 });
 
-describe("gateway", () => {
-  it("requires confirmation, narrows authority, and runs exactly once", async () => {
-    const relay = new InMemoryRelay();
-    const run = vi.fn(async () => ({ summary: "done" }));
-    const a = new Gateway("jon", relay, { run });
-    const b = new Gateway("alex", relay, { run });
-    const delegation = a.delegate("alex", "inspect tests", "/repo", "workspace_write");
-    expect(b.inbox()).toHaveLength(1);
-    const prepared = b.prepareApproval(delegation.id, "read_only");
-    await b.confirmApproval(delegation.id, prepared.capability);
-    await expect(b.confirmApproval(delegation.id, prepared.capability)).rejects.toThrow("invalid_confirmation");
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(b.get(delegation.id)?.effectiveScope).toBe("read_only");
+describe("Agent Kit gateway", () => {
+  it("submits, reads inbox, narrows authority, and never runs Codex in Pigeon", async () => {
+    const fake = new FakeAgentKit();
+    const gateway = new Gateway(identity("jon"), fake);
+    const delegation = await gateway.delegate("alex", "inspect tests", "github_repo:evalops/pigeon", "workspace_write");
+    const recipient = new Gateway(identity("alex"), fake);
+    expect(await recipient.inbox()).toHaveLength(1);
+    const prepared = await recipient.prepareApproval(delegation.id, "read_only");
+    expect(prepared.confirmation.effectiveScope).toBe("read_only");
+    await recipient.confirmApproval(delegation.id, "read_only");
+    expect((await recipient.get(delegation.id))?.effectiveScope).toBe("read_only");
+    expect(fake.approve).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects widened authority", () => {
-    const relay = new InMemoryRelay();
-    const b = new Gateway("alex", relay, { run: async () => ({ summary: "" }) });
-    const a = new Gateway("jon", relay, { run: async () => ({ summary: "" }) });
-    const delegation = a.delegate("alex", "chat", "/repo", "read_only");
-    expect(() => b.prepareApproval(delegation.id, "workspace_write")).toThrow("scope_widening");
+  it("rejects widened authority before calling the daemon", async () => {
+    const fake = new FakeAgentKit();
+    const sender = new Gateway(identity("jon"), fake);
+    const delegation = await sender.delegate("alex", "chat", "github_repo:evalops/pigeon", "read_only");
+    const recipient = new Gateway(identity("alex"), fake);
+    await expect(recipient.prepareApproval(delegation.id, "workspace_write")).rejects.toThrow("scope_widening");
+    expect(fake.approve).not.toHaveBeenCalled();
   });
 });
+
+const identity = (userPrincipalId: string) => ({ organizationId: "org", workspaceId: "workspace", userPrincipalId, devicePrincipalId: `${userPrincipalId}-device` });
+
+class FakeAgentKit implements AgentKitTransport {
+  private runs = new Map<string, RunRecord>();
+  approve = vi.fn(async (id: string, scope: "discuss_only" | "read_only" | "workspace_write") => {
+    const run = await this.getRun(id); run.effective_scope = scope; return run;
+  });
+  async submit(request: SubmitRequest) { const run = { run_id: `run_${this.runs.size + 1}`, request, state: "queued" as const, events: [] }; this.runs.set(run.run_id, run); return run; }
+  async inbox(recipient: string) { return [...this.runs.values()].filter(run => run.request.recipient_principal_id === recipient && !run.effective_scope); }
+  async getRun(id: string) { const run = this.runs.get(id); if (!run) throw Object.assign(new Error("missing"), { code: "not_found" }); return run; }
+  async reject(id: string) { const run = await this.getRun(id); run.state = "rejected"; return run; }
+  async cancel(id: string) { const run = await this.getRun(id); run.state = "cancelled"; return run; }
+}
