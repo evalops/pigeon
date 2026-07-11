@@ -13,7 +13,7 @@
     "validate:plugin": "python3 scripts/validate-plugin.py"
   },
   "dependencies": {
-    "@evalops/agent-kit": "github:evalops/agent-kit#7b96bd0effb8e491fccffab1071975f8818253fa",
+    "@evalops/agent-kit": "file:vendor/evalops-agent-kit-0.1.0.tgz",
     "@modelcontextprotocol/ext-apps": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "express": "^5.1.0",
