@@ -7,11 +7,12 @@ import { Gateway, InMemoryRelay } from "./gateway.js";
 import { canNarrowScope, ScopeSchema } from "./protocol.js";
 import { widgetHtml } from "./widget.js";
 import { RelayClient } from "./relay/client.js";
+import { loadRelayCredentials } from "./enrollment/local-credentials.js";
 
 const relay = new InMemoryRelay();
 const teammate = process.env.PIGEON_USER ?? "local";
 const gateway = new Gateway(teammate, relay, { run: async d => ({ summary: `Delegation ${d.id} accepted; configure PIGEON_CODEX_COMMAND for execution.` }) });
-const remote = process.env.PIGEON_RELAY_URL && process.env.PIGEON_DEVICE_ID && process.env.PIGEON_DEVICE_PRIVATE_KEY ? new RelayClient({ baseUrl: process.env.PIGEON_RELAY_URL, deviceId: process.env.PIGEON_DEVICE_ID, privateKey: process.env.PIGEON_DEVICE_PRIVATE_KEY.replace(/\\n/g, "\n") }) : undefined;
+const credentials = loadRelayCredentials(); const remote = credentials ? new RelayClient({ baseUrl: credentials.relayUrl, deviceId: credentials.deviceId, privateKey: credentials.privateKey }) : undefined;
 const teammates = (process.env.PIGEON_TEAMMATES ?? teammate).split(",").map(value => value.trim()).filter(Boolean);
 const server = new McpServer({ name: "pigeon", version: "0.1.0" }, { instructions: "Use Pigeon only for explicit teammate delegation. Open the inbox to review requests. Approval always requires native confirmation." });
 const UI = "ui://pigeon/inbox-v1.html";

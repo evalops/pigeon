@@ -4,12 +4,14 @@ import type { RelayStore } from "./store.js";
 import { NonceStore, verifyDeviceRequest } from "./auth.js";
 import { CreateDelegationInputSchema, type Actor, type DeviceIdentity } from "./types.js";
 import { parseSlackAction, verifySlackRequest } from "../slack/actions.js";
+import type { EnrollmentService } from "../enrollment/service.js";
+import type { SlackOidcClient } from "../enrollment/slack-oidc.js";
 
-type Options = { store: RelayStore; devices: Map<string, DeviceIdentity>; clock?: () => number; slackInternalSecret?: string; slackSigningSecret?: string };
+type Options = { store: RelayStore; devices: Map<string, DeviceIdentity>; clock?: () => number; slackInternalSecret?: string; slackSigningSecret?: string; enrollment?: EnrollmentService; oidc?: Pick<SlackOidcClient, "authorizationUrl" | "exchange"> };
 const TransitionBody = z.object({ expectedVersion: z.number().int().positive(), effectiveScope: z.enum(["discuss_only", "read_only", "workspace_write"]).optional() });
 const errorStatus: Record<string, number> = { not_found: 404, expired: 410, version_conflict: 409, scope_widening: 403, invalid_transition: 409, replay: 401, stale_request: 401, invalid_signature: 401, unauthorized: 401, codex_confirmation_required: 403 };
 
-export function createRelayApp({ store, devices, clock = Date.now, slackInternalSecret, slackSigningSecret }: Options) {
+export function createRelayApp({ store, devices, clock = Date.now, slackInternalSecret, slackSigningSecret, enrollment, oidc }: Options) {
   const app = express(); const nonces = new NonceStore();
   app.post("/v1/slack/actions", express.text({ type: "application/x-www-form-urlencoded", limit: "32kb" }), async (req, res, next) => {
     try {
@@ -20,6 +22,12 @@ export function createRelayApp({ store, devices, clock = Date.now, slackInternal
     } catch (error) { next(error); }
   });
   app.use(express.json({ limit: "32kb" }));
+  app.post("/v1/enrollment/start", async (req, res, next) => {
+    try { if (!enrollment || !oidc) throw new Error("enrollment_unavailable"); const input = z.object({ deviceId: z.string(), publicKey: z.string(), redirectUri: z.string().url(), teamId: z.string().optional() }).parse(req.body); const pending = await enrollment.start(input); const authorizeUrl = oidc.authorizationUrl({ state: pending.state, nonce: pending.nonce, redirectUri: input.redirectUri, teamId: input.teamId }); res.status(201).json({ authorizeUrl: authorizeUrl.href, expiresAt: pending.expiresAt }); } catch (error) { next(error); }
+  });
+  app.get("/v1/enrollment/callback", async (req, res, next) => {
+    try { if (!enrollment || !oidc) throw new Error("enrollment_unavailable"); const state = String(req.query.state ?? ""); const code = String(req.query.code ?? ""); const pending = await enrollment.inspect(state); const identity = await oidc.exchange({ code, redirectUri: pending.redirectUri }); const device = await enrollment.complete(state, identity); devices.set(device.id, device); res.type("html").send("<!doctype html><title>Pigeon enrolled</title><p>Pigeon device enrolled. You can close this window.</p>"); } catch (error) { next(error); }
+  });
   app.get("/healthz", (_req, res) => { res.json({ ok: true }); });
 
   const deviceActor = (req: Request): Actor => {

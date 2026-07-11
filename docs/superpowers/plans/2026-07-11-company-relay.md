@@ -138,3 +138,41 @@
 - [ ] Inspect tracked files and build output for credentials, private keys, absolute personal paths, and raw workspace content.
 - [ ] Commit with `git commit -m "docs: ship company relay deployment"`.
 - [ ] Push the branch, open a draft pull request against `evalops/pigeon:main`, and report validation evidence and remaining production prerequisites.
+
+### Task 7: Slack OIDC device enrollment
+
+**Files:**
+- Create: `src/enrollment/service.ts`
+- Create: `src/enrollment/service.test.ts`
+- Create: `src/enrollment/slack-oidc.ts`
+- Create: `src/enrollment/slack-oidc.test.ts`
+- Create: `scripts/enroll-device.mjs`
+- Modify: `src/relay/migrations/001_relay.sql`
+- Modify: `src/relay/app.ts`
+- Modify: `src/relay/main.ts`
+
+**Interfaces:**
+- Produces: short-lived enrollment sessions, Slack OIDC authorization/callback endpoints, durable device registration and revocation, and a local enrollment CLI that keeps the private key on the Codex machine.
+
+- [ ] Write failing tests for state hashing, expiry, Slack workspace/user binding, duplicate device rejection, durable lookup, and revocation.
+- [ ] Implement OIDC authorization, token exchange, user-info verification, and transactional Postgres enrollment.
+- [ ] Add a local CLI that generates an Ed25519 key, completes browser enrollment, and writes an owner-only device credential file.
+- [ ] Run focused tests, live Postgres tests, and a two-device enrollment smoke test.
+- [ ] Commit with `git commit -m "feat: enroll devices with Slack OIDC"`.
+
+### Task 8: Real Codex app-server execution
+
+**Files:**
+- Create: `src/codex/app-server.ts`
+- Create: `src/codex/app-server.test.ts`
+- Modify: `src/server.ts`
+- Modify: `docs/company-relay.md`
+
+**Interfaces:**
+- Produces: `CodexAppServerAdapter.run`, which starts an ephemeral Codex thread in the approved local workspace, applies the scope sandbox, starts one turn, streams until terminal completion, and returns a bounded final summary and thread ID.
+
+- [ ] Write failing protocol tests with a deterministic JSON-RPC fixture process.
+- [ ] Implement initialize, `thread/start`, `turn/start`, notification handling, timeout, cancellation, and process cleanup.
+- [ ] Replace lifecycle-only remote completion with adapter execution before the final relay transition.
+- [ ] Run focused tests and a real discuss-only `codex app-server` smoke task.
+- [ ] Commit with `git commit -m "feat: execute delegations in codex app-server"`.
