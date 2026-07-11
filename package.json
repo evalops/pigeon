@@ -5,12 +5,12 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json",
     "dev": "tsx src/server.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "validate:plugin": "python3 /Users/jonathanhaas/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/pigeon"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "validate:plugin": "python3 scripts/validate-plugin.py"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.1",

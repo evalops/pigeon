@@ -1,0 +1,19 @@
+{
+  "name": "pigeon",
+  "version": "0.1.0",
+  "description": "Approval-gated Codex delegation for teammates",
+  "author": {
+    "name": "EvalOps"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Pigeon",
+    "shortDescription": "Send bounded work to a teammate's Codex.",
+    "longDescription": "Pigeon provides a signed delegation inbox, scope narrowing, native approval confirmation, and attributed results.",
+    "developerName": "EvalOps",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": ["Open my Pigeon inbox.", "Delegate a read-only task to a teammate."]
+  },
+  "mcpServers": "./.mcp.json"
+}
