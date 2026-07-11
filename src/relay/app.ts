@@ -25,7 +25,7 @@ export function createRelayApp({ store, devices, clock = Date.now, slackInternal
   const deviceActor = (req: Request): Actor => {
     const id = String(req.header("x-pigeon-device") ?? ""); const device = devices.get(id); if (!device || device.revokedAt) throw new Error("unauthorized");
     const timestamp = Number(req.header("x-pigeon-timestamp")); const nonce = String(req.header("x-pigeon-nonce") ?? ""); const signature = String(req.header("x-pigeon-signature") ?? "");
-    verifyDeviceRequest({ method: req.method, path: req.path, timestamp, nonce, body: req.body ?? null, signature }, device.publicKey, nonces, clock());
+    verifyDeviceRequest({ method: req.method, path: req.originalUrl, timestamp, nonce, body: req.body ?? null, signature }, device.publicKey, nonces, clock());
     return { organizationId: device.organizationId, userId: device.userId, deviceId: device.id, source: "codex" };
   };
   const transitionActor = (req: Request) => {
@@ -37,6 +37,7 @@ export function createRelayApp({ store, devices, clock = Date.now, slackInternal
   };
 
   app.post("/v1/delegations", async (req, res, next) => { try { const actor = deviceActor(req); const result = await store.createDelegation(CreateDelegationInputSchema.parse(req.body), actor); res.status(201).json(result); } catch (error) { next(error); } });
+  app.get("/v1/delegations/:id", async (req, res, next) => { try { const actor = deviceActor(req); const delegation = await store.get(req.params.id!, actor.organizationId, actor.userId); if (!delegation) throw new Error("not_found"); res.json({ delegation }); } catch (error) { next(error); } });
   app.get("/v1/events", async (req, res, next) => { try { const actor = deviceActor(req); res.json({ events: await store.events(actor.organizationId, actor.userId, Number(req.query.after ?? 0)) }); } catch (error) { next(error); } });
   for (const action of ["approve", "reject", "start", "complete", "fail", "cancel"] as const) app.post(`/v1/delegations/:id/${action}`, async (req, res, next) => {
     try {
