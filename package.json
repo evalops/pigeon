@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/relay/migrations && cp src/relay/migrations/*.sql dist/relay/migrations/",
     "dev": "tsx src/server.ts",
+    "relay": "node dist/relay/main.js",
+    "enroll": "node scripts/enroll-device.mjs",
+    "smoke:relay": "node scripts/smoke-relay.mjs",
     "test": "vitest run src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
@@ -16,6 +21,7 @@
     "@modelcontextprotocol/ext-apps": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "express": "^5.1.0",
+    "pg": "^8.22.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.1.13"
@@ -26,6 +32,7 @@
     "@testing-library/react": "^16.3.0",
     "@types/express": "^5.0.5",
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

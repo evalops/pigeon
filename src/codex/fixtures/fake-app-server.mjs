@@ -1,0 +1,4 @@
+import readline from "node:readline";
+const rl = readline.createInterface({ input: process.stdin }); let threadParams;
+const send = value => process.stdout.write(`${JSON.stringify(value)}\n`);
+rl.on("line", line => { const message = JSON.parse(line); if (message.method === "initialize") send({ id: message.id, result: {} }); else if (message.method === "thread/start") { threadParams = message.params; send({ id: message.id, result: { thread: { id: "thread-1" } } }); } else if (message.method === "turn/start") { send({ id: message.id, result: { turn: { id: "turn-1" } } }); send({ method: "item/agentMessage/delta", params: { threadId: "thread-1", turnId: "turn-1", itemId: "item-1", delta: `completed:${threadParams.sandbox}:${threadParams.cwd}:${threadParams.model}` } }); send({ method: "turn/completed", params: { threadId: "thread-1", turn: { id: "turn-1", status: "completed", items: [] } } }); } });
