@@ -13,7 +13,7 @@ Pigeon packages an MCP server, an embedded delegation inbox, signed authority en
 - Confirmation capabilities are short-lived and single-use.
 - Delegation state transitions and Ed25519 envelopes are tested.
 
-The included transport is intentionally an in-process evaluation relay. It proves the full approval and execution contract without exposing a machine on the network. A production deployment must replace `InMemoryRelay` with an authenticated durable transport and connect `CodexAdapter` to the local Codex app-server; those boundaries are explicit in `src/gateway.ts`.
+The default transport remains an in-process evaluation relay. A Postgres-backed, signed HTTP relay is also included for durable cross-window and cross-machine delivery. See [Company relay operations](docs/company-relay.md).
 
 ## Run
 
@@ -26,6 +26,8 @@ node dist/server.js
 ```
 
 The MCP process uses stdio. Install the repo-local marketplace, then install `pigeon` and start a new Codex task so tools and skills reload.
+
+For company-relay development, run `docker compose up postgres`, then use `PIGEON_TEST_DATABASE_URL=postgres://pigeon:pigeon-local@127.0.0.1:55432/pigeon pnpm test`.
 
 ## Approval contract
 

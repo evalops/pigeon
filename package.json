@@ -7,8 +7,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/relay/migrations && cp src/relay/migrations/*.sql dist/relay/migrations/",
     "dev": "tsx src/server.ts",
+    "relay": "node dist/relay/main.js",
+    "smoke:relay": "node scripts/smoke-relay.mjs",
     "test": "vitest run src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",

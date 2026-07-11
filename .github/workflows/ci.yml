@@ -5,6 +5,15 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: pigeon, POSTGRES_PASSWORD: pigeon, POSTGRES_DB: pigeon }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pigeon" --health-interval 2s --health-timeout 2s --health-retries 20
+    env:
+      PIGEON_TEST_DATABASE_URL: postgres://pigeon:pigeon@127.0.0.1:5432/pigeon
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -15,3 +24,4 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
+      - run: PIGEON_SMOKE_DATABASE_URL=$PIGEON_TEST_DATABASE_URL pnpm smoke:relay
